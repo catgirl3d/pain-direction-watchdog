@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Pain Direction Watchdog
 // @namespace    pain-direction-watchdog
-// @version      0.3.3
+// @version      0.4.0
 // @description  Keeps steering doses in their corridors by clicking Raise/Lower at a human pace.
 // @match        https://paindirection.pages.dev/*
 // @run-at       document-idle
@@ -53,6 +53,12 @@
   const TICK_MS = 500;
   const GAP_MIN_MS = 2500;
   const ROUND_END_BUFFER_MS = 5000;
+  // the live page tells us when the socket is gone or the experiment is over.
+  // Clicking then only dispatches into a dead socket and fakes the log, so
+  // hold every vote until the page reports a live round again. These phrases
+  // mirror the live client's status texts (app.js): if the site rewords them,
+  // the guard silently stops matching and must be updated by hand.
+  const BLOCKED_STATUS = /Reload to vote here|Connection lost\. Reconnecting\.|That was the last round\./;
 
   function randomGap(remainingMs, votesLeft) {
     const budget = remainingMs - ROUND_END_BUFFER_MS;
@@ -99,9 +105,27 @@
   let lastRound = null;
   let nextAt = 0;
   let roundDeadline = 0;
+  let blockedReason = null;
 
   function tick() {
+    if (typeof location !== "undefined" && location.pathname.startsWith("/results")) return;
     mountBadge();
+    const status = document.getElementById("status")?.textContent ?? "";
+    if (BLOCKED_STATUS.test(status)) {
+      nextAt = 0;
+      const reason = status.includes("Reload to vote here")
+        ? "connection taken over elsewhere — reload the page to resume"
+        : status.includes("last round")
+          ? "experiment finished — the results replace the page soon"
+          : "site is reconnecting — holding votes";
+      setStatus(reason);
+      if (reason !== blockedReason) {
+        blockedReason = reason;
+        log(`holding votes: ${reason}`);
+      }
+      return;
+    }
+    blockedReason = null;
     const round = readRound();
     const doses = readDoses();
     if (round === null || !doses) return;
@@ -157,8 +181,10 @@
       const { key, vote, button } = pending.shift();
       button.click();
       const action = `${key} at ${doses[key] > 0 ? "+" : ""}${doses[key].toFixed(2)} → ${vote < 0 ? "lower" : "raise"}`;
-      setStatus(`round ${round}: voted ${action}`);
-      log(`round ${round}: voted ${action}`);
+      // a click is dispatched, not confirmed: the server's "voted" message is
+      // the site's business, so claim only what we did
+      setStatus(`round ${round}: clicked ${action}`);
+      log(`round ${round}: clicked ${action}`);
     }
     const scheduledAt = Date.now();
     const delay = randomGap(roundDeadline - scheduledAt, pending.length);

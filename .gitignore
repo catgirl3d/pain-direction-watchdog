@@ -3,3 +3,4 @@ session.txt
 sessions/
 .env
 *.log
+reference/*

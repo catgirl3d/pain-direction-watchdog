@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { once } from "node:events";
 import { WebSocketServer } from "ws";
-import { reconnectDelay, startWatchdog, voteGapDelay, voteJitter } from "./watchdog.js";
+import { reconnectDelay, startWatchdog, stateEndpoint, voteGapDelay, voteJitter } from "./watchdog.js";
 
 const silent = () => {};
 
@@ -23,8 +23,10 @@ async function startServer(t, ballot = PAIN_FEAR, hello = {}) {
   await once(wss, "listening");
   const { port } = wss.address();
   let socket = null;
+  let connections = 0;
   wss.on("connection", (s) => {
     socket = s;
+    connections += 1;
     s.on("message", (raw) => {
       received.push(JSON.parse(raw.toString()));
       stamps.push(Date.now());
@@ -32,7 +34,7 @@ async function startServer(t, ballot = PAIN_FEAR, hello = {}) {
     s.send(JSON.stringify({ type: "hello", you: "Tester", ballot, ...hello }));
   });
   t.after(() => wss.close());
-  return { received, stamps, port, socketOf: () => socket };
+  return { received, stamps, port, socketOf: () => socket, connectionCount: () => connections };
 }
 
 test("logs the round tallies the server reports on close", async (t) => {
@@ -192,4 +194,140 @@ test("does not vote twice inside one round and votes again after a close", async
   server.socketOf().send(state(2, { pain: -0.5, fear: 0.1 }));
   await new Promise((resolve) => setTimeout(resolve, 200));
   assert.equal(server.received.length, 3, "the round-after-close vote is not repeated");
+});
+
+test("derives the state endpoint from the websocket url", () => {
+  assert.equal(stateEndpoint("wss://paindirection.pages.dev/ws?s=x"), "https://paindirection.pages.dev/api/state");
+  assert.equal(stateEndpoint("ws://127.0.0.1:8791/ws?s=x"), "http://127.0.0.1:8791/api/state");
+});
+
+test("the ended message stops the watch without reconnecting", async (t) => {
+  const server = await startServer(t);
+  const lines = [];
+  let endedCalls = 0;
+  const bot = startWatchdog({
+    url: `ws://127.0.0.1:${server.port}/ws?s=test`,
+    log: (line) => lines.push(line),
+    reconnect: () => 5,
+    onEnded: () => { endedCalls += 1; },
+  });
+  t.after(() => bot.close());
+
+  await waitFor(() => server.socketOf());
+  const socket = server.socketOf();
+  const closed = once(socket, "close");
+  socket.send(JSON.stringify({ type: "ended" }));
+  await closed;
+  assert.equal(endedCalls, 1, "the run is told the experiment ended");
+  assert.ok(lines.some((line) => line.includes("experiment has ended")), JSON.stringify(lines));
+  await new Promise((resolve) => setTimeout(resolve, 100));
+  assert.equal(server.connectionCount(), 1, "no reconnect after the final round");
+});
+
+test("sanitizes the close reason before logging it", async (t) => {
+  const server = await startServer(t);
+  const lines = [];
+  const bot = startWatchdog({
+    url: `ws://127.0.0.1:${server.port}/ws?s=test`,
+    log: (line) => lines.push(line),
+    reconnect: () => 5,
+  });
+  t.after(() => bot.close());
+
+  await waitFor(() => server.socketOf());
+  server.socketOf().close(1000, "bye\n[forged] \u001b[31mred");
+  await waitFor(() => lines.some((line) => line.includes("code 1000")));
+  const line = lines.find((one) => one.includes("code 1000"));
+  assert.ok(!line.includes("\n"), "the reason cannot forge log lines");
+  assert.doesNotMatch(line, /[\u0000-\u001f\u007f-\u009f]/, "no terminal control characters");
+});
+
+test("a throwing onEnded callback does not keep the bot connected", async (t) => {
+  const server = await startServer(t);
+  const lines = [];
+  const bot = startWatchdog({
+    url: `ws://127.0.0.1:${server.port}/ws?s=test`,
+    log: (line) => lines.push(line),
+    reconnect: () => 5,
+    onEnded: () => { throw new Error("boom"); },
+  });
+  t.after(() => bot.close());
+
+  await waitFor(() => server.socketOf());
+  const socket = server.socketOf();
+  const closed = once(socket, "close");
+  socket.send(JSON.stringify({ type: "ended" }));
+  await closed;
+  assert.ok(lines.some((line) => line.includes("onEnded callback failed: boom")), JSON.stringify(lines));
+  await new Promise((resolve) => setTimeout(resolve, 100));
+  assert.equal(server.connectionCount(), 1, "the receiving watchdog still stops");
+});
+
+test("never dials when the state endpoint already says the experiment ended", async (t) => {
+  const server = await startServer(t);
+  const lines = [];
+  let endedCalls = 0;
+  const bot = startWatchdog({
+    url: `ws://127.0.0.1:${server.port}/ws?s=test`,
+    log: (line) => lines.push(line),
+    isEnded: async () => true,
+    onEnded: () => { endedCalls += 1; },
+  });
+  t.after(() => bot.close());
+
+  await waitFor(() => endedCalls === 1);
+  assert.ok(lines.some((line) => line.includes("experiment has ended")), JSON.stringify(lines));
+  assert.equal(server.connectionCount(), 0, "no websocket while the experiment is over");
+});
+
+test("connects normally when the state endpoint says the experiment is running", async (t) => {
+  const server = await startServer(t);
+  const bot = startWatchdog({
+    url: `ws://127.0.0.1:${server.port}/ws?s=test`,
+    log: silent,
+    isEnded: async () => false,
+  });
+  t.after(() => bot.close());
+
+  await waitFor(() => server.socketOf());
+  assert.equal(server.connectionCount(), 1);
+});
+
+test("stopping during the state check prevents the connection and the callback", async (t) => {
+  const server = await startServer(t);
+  let release;
+  const probe = new Promise((resolve) => { release = resolve; });
+  let endedCalls = 0;
+  const bot = startWatchdog({
+    url: `ws://127.0.0.1:${server.port}/ws?s=test`,
+    log: silent,
+    isEnded: () => probe,
+    onEnded: () => { endedCalls += 1; },
+  });
+
+  bot.close();
+  release(true);
+  await new Promise((resolve) => setTimeout(resolve, 100));
+  assert.equal(server.connectionCount(), 0);
+  assert.equal(endedCalls, 0, "a manual stop is not the end of the experiment");
+});
+
+test("close code 4001 yields the slot instead of reconnecting or ending the run", async (t) => {
+  const server = await startServer(t);
+  const lines = [];
+  let endedCalls = 0;
+  const bot = startWatchdog({
+    url: `ws://127.0.0.1:${server.port}/ws?s=test`,
+    log: (line) => lines.push(line),
+    reconnect: () => 5,
+    onEnded: () => { endedCalls += 1; },
+  });
+  t.after(() => bot.close());
+
+  await waitFor(() => server.socketOf());
+  server.socketOf().close(4001, "replaced by a newer connection");
+  await waitFor(() => lines.some((line) => line.includes("4001")));
+  await new Promise((resolve) => setTimeout(resolve, 100));
+  assert.equal(server.connectionCount(), 1, "no reconnect after yielding the slot");
+  assert.equal(endedCalls, 0, "a slot takeover is not the end of the experiment");
 });

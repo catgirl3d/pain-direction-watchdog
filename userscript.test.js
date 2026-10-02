@@ -20,7 +20,12 @@ function loadUserscript(sandbox = { module: { exports: {} } }, directions) {
 }
 
 function browserPage({ doses = { pain: 0.8 }, random = () => 0.5, directions } = {}) {
-  const page = { now: 0, round: 1, endsAt: 45000, doses: { ...doses }, votes: [], myVotes: new Map(), timerText: null };
+  const logs = [];
+  const location = { pathname: "/" };
+  const page = {
+    now: 0, round: 1, endsAt: 45000, doses: { ...doses }, votes: [], myVotes: new Map(),
+    timerText: null, statusText: "", logs, location,
+  };
   let tick;
   const rows = Object.keys(doses).map((key) => {
     const value = { get textContent() { return String(page.doses[key]); } };
@@ -43,7 +48,10 @@ function browserPage({ doses = { pain: 0.8 }, random = () => 0.5, directions } =
       },
     };
   });
-  const nodes = { roundno: { textContent: "1" }, timer: { textContent: "0:45" }, rows: { querySelectorAll: () => rows } };
+  const nodes = {
+    roundno: { textContent: "1" }, timer: { textContent: "0:45" }, status: { textContent: "" },
+    rows: { querySelectorAll: () => rows },
+  };
   const mounted = new Set();
   const math = Object.create(Math);
   math.random = random;
@@ -58,15 +66,18 @@ function browserPage({ doses = { pain: 0.8 }, random = () => 0.5, directions } =
     Math: math,
     Date: { now: () => page.now },
     CSS: { escape: (key) => key },
-    console: { log() {} },
+    console: { log: (line) => logs.push(String(line)) },
+    location,
     setInterval: (callback) => { tick = callback; },
   }, directions);
+  page.badgeMounted = () => mounted.size > 0;
   page.tickAt = (at, { round = page.round, endsAt = page.endsAt } = {}) => {
     if (round !== page.round) page.myVotes.clear();
     page.now = at;
     page.round = round;
     page.endsAt = endsAt;
     nodes.roundno.textContent = String(round);
+    nodes.status.textContent = page.statusText;
     const seconds = Math.max(0, Math.ceil((endsAt - at) / 1000));
     nodes.timer.textContent = page.timerText ?? (endsAt
       ? `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`
@@ -234,4 +245,48 @@ test("a delayed vote is rechecked against current doses and already selected but
       assert.deepEqual(page.votes, [], `dose ${dose}, change ${change}`);
     }
   }
+});
+
+test("holds clicks while the site reports a lost connection and resumes once it clears", () => {
+  const page = browserPage({ doses: { pain: 0.8, fear: 0.8 }, random: () => 0 });
+  page.statusText = "Connection lost. Reconnecting.";
+  page.tickAt(0);
+  page.runUntil(20000);
+  assert.deepEqual(page.votes, [], "no clicks into a reconnecting socket");
+
+  page.statusText = "";
+  page.runUntil(45000);
+  assert.deepEqual(page.votes.map(({ key, v }) => [key, v]).sort(), [["fear", -1], ["pain", -1]]);
+  assert.ok(page.logs.some((line) => line.includes("clicked")), JSON.stringify(page.logs));
+  assert.ok(!page.logs.some((line) => line.includes("voted")), "a DOM click is not a confirmed vote");
+});
+
+test("logs the blocker once while it holds, not once per tick", () => {
+  const page = browserPage({ doses: { pain: 0.8 }, random: () => 0 });
+  page.statusText = "This page is open somewhere newer on your connection. Reload to vote here.";
+  page.tickAt(0);
+  page.runUntil(45000);
+  const held = page.logs.filter((line) => line.includes("holding votes:"));
+  assert.equal(held.length, 1, JSON.stringify(page.logs));
+  assert.match(held[0], /taken over/);
+});
+
+test("stays quiet on the slot takeover, on the last round and on the results page", () => {
+  for (const status of [
+    "This page is open somewhere newer on your connection. Reload to vote here.",
+    "That was the last round. The results replace this page in a few seconds.",
+  ]) {
+    const page = browserPage({ doses: { pain: 0.8 } });
+    page.statusText = status;
+    page.tickAt(0);
+    page.runUntil(45000);
+    assert.deepEqual(page.votes, [], status);
+  }
+
+  const results = browserPage({ doses: { pain: 0.8 } });
+  results.location.pathname = "/results";
+  results.tickAt(0);
+  results.runUntil(45000);
+  assert.deepEqual(results.votes, []);
+  assert.equal(results.badgeMounted(), false, "no badge on the results page");
 });

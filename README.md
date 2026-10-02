@@ -28,6 +28,8 @@ The free directions — joy, calm, fried_chicken, rain and cat — are left alon
    (in Firefox: `sessionStorage.getItem("cs_session")` and copy the output by hand).
 3. Save the value into a session file: `session.txt` in the project root or `sessions/<name>.txt`.
 
+Getting a session needs an ordinary connection: `/api/session` refuses VPNs, Tor and data-center exits with the `network` error, so pass the check from a regular connection.
+
 Sessions are personal; never commit them (the paths are in `.gitignore`). If reconnects keep being refused, the log says `the session is stale or the site rate-limits this IP` — grab a fresh session the same way.
 
 ## Running
@@ -59,7 +61,7 @@ If any file is missing or empty, no instance starts — fix the files first (fai
 
 Votes go out one by one with a random 2.5–5 second pause — the site drops votes that arrive too close together (`vote-error: Too fast`), and a metronome gives a bot away. All of a session's votings go through one shared pacer, so even overlapping batches (a mid-round connect plus a close) never send votes back to back. On top of that every copy starts with a random 0–10 second delay after the round closes, so instances don't strike in sync.
 
-On a disconnect the bot reconnects with exponential backoff (3s → 60s).
+On a disconnect the bot reconnects with exponential backoff (3s → 60s), with two deliberate exceptions. When the final round closes the server sends `ended`: every instance stops voting for good and the run ends (the results live at `/results`). Before every connect the bot also asks `/api/state`, so a copy that was between sockets at the final moment does not hammer a finished site. And when the server closes the socket with code `4001` — a newer connection from this address has taken the slot — the bot yields instead of fighting for it: it logs the takeover and stops, exactly as the live page tells its visitor to reload; restart the watchdog to take the slot back.
 
 One session — one vote. Use a separate session, and its own network exit, for every copy you want to run independently.
 
@@ -82,6 +84,8 @@ Install:
 
 The script reads doses from the table and clicks Raise/Lower under the same rules (the ±0.07 corridors, free directions up to +0.30, directions in random order). Pauses float with the round: each next click is picked at random from the time left, never less than 2.5 seconds after the previous one and never inside the last five seconds before the countdown closes; if the remaining votes cannot fit, they are skipped rather than rushed, and the next round re-checks them. To the server these are ordinary clicks in a live browser session. The log is mirrored to the console (F12).
 
+While the page reports a lost connection or a slot taken over by a newer tab (`Reload to vote here`), the script holds every click instead of clicking into a dead socket, logs the blocker once, and the badge says why; it resumes once the round is live again. Its log says `clicked` — a dispatched DOM click, not a server-confirmed vote. On `/results` it stays idle. The blocked-state phrases are copied from the live client (`app.js`); if the site rewords them, the guard stops matching and must be updated by hand.
+
 At the top of the script the `DIRECTIONS` map switches directions on and off: a direction set to `false` is never clicked and is left out of the pacing.
 
 Don't run the script and the Node bot from the same IP at once.
@@ -92,10 +96,11 @@ Don't run the script and the Node bot from the same IP at once.
 npm test
 ```
 
-Unit tests for the strategy and session resolution, a parity test that the userscript maths matches the shared strategy, browser-policy tests that run the real userscript in a VM (floating pauses, round boundaries, countdown guards, direction switches), plus e2e over a local WebSocket server: voting on every direction from the ballot, ignoring the rest, no duplicate votes inside a round, and voting right after a close.
+Unit tests for the strategy and session resolution, a parity test that the userscript maths matches the shared strategy, browser-policy tests that run the real userscript in a VM (floating pauses, round boundaries, countdown guards, direction switches), plus e2e over a local WebSocket server: voting on every direction from the ballot, ignoring the rest, no duplicate votes inside a round, and voting right after a close. Lifecycle coverage: the `ended` message and an `/api/state` that already says `ended` stop the run without reconnecting, close code `4001` yields the slot, and the userscript holds clicks through reconnecting, takeover, last-round and `/results` states.
 
 ## Limitations
 
 - The site's protocol is unofficial: if it changes, voting may quietly stop — watch that `confirmed:` lines keep appearing in the log (a reconnect storm is the other tell).
-- Use a separate session per instance — sharing one session between instances is not supported.
+- `/api/session` refuses VPN, Tor and data-center exits, so get sessions from an ordinary connection.
+- Use a separate session per instance — sharing one session between instances is not supported. Connections from one address share a slot, so a newer one (a browser tab or another copy) can take it over with code `4001`; each watchdog then yields and waits to be restarted.
 - If the bot can no longer connect, grab a fresh session through the browser the same way.
