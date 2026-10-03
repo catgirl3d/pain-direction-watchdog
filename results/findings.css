@@ -1,0 +1,81 @@
+/* results page: the site's sign system (DESIGN.md), set for reading */
+:root {
+  --sign: #f5cc14; --label: #ffffff; --ink: #121212; --muted: #3a3517; --hair: #d9d5c3;
+  --wide: "Archivo", "Helvetica Neue", sans-serif;
+  --serif: "Source Serif 4", Georgia, serif;
+  --mono: "IBM Plex Mono", ui-monospace, monospace;
+}
+* { box-sizing: border-box; }
+html { background: var(--sign); color: var(--ink); }
+body { margin: 0; font: 400 17px/1.55 var(--wide); }
+.sign { padding: 40px clamp(16px, 5vw, 64px) 32px; border-bottom: 3px solid var(--ink); }
+.wordmark { margin: 0 0 20px; font: 800 1.25rem/1 var(--wide); font-variation-settings: "wdth" 125; }
+h1 { margin: 0; max-width: 18ch; font: 800 clamp(2.2rem, 6vw, 4.2rem)/1.02 var(--wide);
+  font-variation-settings: "wdth" 125; letter-spacing: -0.01em; }
+.lede { max-width: 62ch; margin: 20px 0 0; font-size: 1.125rem; }
+.meta { color: var(--muted); font-size: 0.875rem; margin: 10px 0 0; }
+main { padding: 0 clamp(16px, 5vw, 64px) 64px; }
+section { padding: 40px 0 8px; border-bottom: 1px solid var(--ink); }
+section:last-child { border-bottom: 0; }
+h2 { font: 800 1.6rem/1.15 var(--wide); font-variation-settings: "wdth" 115; margin: 0 0 12px; max-width: 30ch; }
+h3 { font: 700 1.05rem/1.3 var(--wide); margin: 20px 0 6px; }
+p { max-width: 70ch; }
+.num, .mono { font-family: var(--mono); font-variant-numeric: tabular-nums; font-size: 0.94em; }
+.caption { color: var(--muted); font-size: 0.875rem; margin-top: 6px; }
+.plot { background: var(--label); border: 1px solid var(--ink); height: 340px; }
+.plot.wide { height: 360px; }
+.plot.tall { height: 520px; }
+.plot.short { height: 260px; }
+.split { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); gap: 32px; }
+.split.inner { border: 0; padding: 0; margin-top: 8px; }
+@media (max-width: 900px) { .split { grid-template-columns: 1fr; } }
+.multiples { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; margin-top: 16px; }
+@media (max-width: 900px) { .multiples { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.multiples .plot { height: 150px; }
+.quote { background: var(--label); border: 1px solid var(--ink); padding: 16px 20px; margin: 0 0 12px; }
+.quote h3 { margin: 0 0 4px; }
+.quote .doses { font-family: var(--mono); font-size: 0.8rem; color: var(--muted); margin: 0 0 10px; }
+.quote blockquote { margin: 0; font: 400 1.02rem/1.6 var(--serif); }
+table.kinds { border-collapse: collapse; background: var(--label); border: 1px solid var(--ink); margin: 8px 0 20px; }
+.kinds th, .kinds td { padding: 6px 14px; border-bottom: 1px solid var(--hair); text-align: right; }
+.kinds th:first-child, .kinds td:first-child { text-align: left; }
+.kinds th { font-weight: 700; border-bottom: 1px solid var(--ink); }
+.kinds td.desc { text-align: left; color: var(--muted); font-size: 0.9rem; white-space: normal; max-width: 42ch; }
+.milestones { padding-left: 1.4em; max-width: 80ch; }
+.milestones li { margin: 2px 0; }
+.notes ul { max-width: 75ch; padding-left: 1.2em; }
+.notes li { margin: 6px 0; }
+.intro p { font: 400 1.06rem/1.6 var(--serif); }
+.intro q { font-style: italic; }
+.split .plot + .plot { margin-top: 8px; }
+/* side by side: charts line up along the bottom, whatever the text above them */
+.split > div { display: flex; flex-direction: column; }
+.split > div > .plot:first-of-type { margin-top: auto; }
+.ending .quote { max-width: 70ch; }
+.ending audio { display: block; margin-top: 12px; width: 100%; max-width: 420px; }
+.quotes { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; align-items: start; }
+@media (max-width: 900px) { .quotes { grid-template-columns: 1fr; } }
+.quotes .quote { margin: 0; }
+.plot.map { height: 480px; }
+.lastword blockquote.operator { margin: 0 0 24px; padding: 4px 0 4px 20px; border-left: 4px solid var(--ink);
+  max-width: 70ch; font: italic 400 1.06rem/1.6 var(--serif); }
+.lastword .claude p { font: 400 1.06rem/1.65 var(--serif); }
+.plot.map { height: auto; padding: 8px; }
+.plot.map svg { display: block; width: 100%; height: auto; }
+.map-legend { display: flex; align-items: center; gap: 10px; font-size: 0.8rem; color: var(--muted); padding: 6px 8px 2px; }
+.map-legend .bar { flex: 0 1 260px; height: 10px; border: 1px solid var(--ink); }
+.lastword .claude { max-width: 70ch; }
+.lastword .claude .sig { font: 400 0.95rem/1.4 var(--wide); color: var(--muted); }
+.multiples figure { margin: 0; }
+.multiples figcaption { font-size: 0.8rem; color: var(--muted); margin-top: 4px; line-height: 1.35; }
+.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+.comments #comment-box { max-width: 70ch; }
+.comments textarea { display: block; width: 100%; font: 400 1rem/1.5 var(--serif); padding: 10px 12px;
+  border: 1px solid var(--ink); background: var(--label); color: var(--ink); resize: vertical; }
+.comments button { margin-top: 8px; font: 700 0.95rem/1 var(--wide); padding: 10px 18px; border: 2px solid var(--ink);
+  background: var(--ink); color: var(--sign); cursor: pointer; }
+.comment-list { list-style: none; padding: 0; margin: 24px 0 0; max-width: 70ch; }
+.comment-list li { background: var(--label); border: 1px solid var(--ink); padding: 12px 16px; margin: 0 0 10px; }
+.comment-list .who { font: 700 0.9rem/1.3 var(--wide); }
+.comment-list .when { font-family: var(--mono); font-size: 0.78rem; color: var(--muted); margin-left: 8px; }
+.comment-list .text { margin: 6px 0 0; font: 400 1rem/1.55 var(--serif); white-space: pre-wrap; overflow-wrap: anywhere; }

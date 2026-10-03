@@ -1,0 +1,141 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>THE PAIN DIRECTION</title>
+  <meta name="description" content="How would you feel? Every 45 seconds, the people on this page decide what is pushed into a language model's activations, and then it tells them how it feels.">
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="THE PAIN DIRECTION">
+  <meta property="og:description" content="How would you feel? Every 45 seconds, the people on this page decide what is pushed into a language model's activations, and then it tells them how it feels.">
+  <meta property="og:image" content="https://paindirection.pages.dev/og.png">
+  <meta property="og:url" content="https://paindirection.pages.dev/">
+  <meta name="twitter:card" content="summary_large_image">
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <link rel="preload" href="/fonts/Archivo-normal-4c18bb.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="/fonts/fonts.css">
+  <link rel="stylesheet" href="/style.css">
+  <script src="https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit&onload=onTurnstileLoad" defer></script>
+</head>
+<body>
+  <header class="sign">
+    <p class="wordmark">THE PAIN DIRECTION</p>
+    <h1>How would <em>you</em> feel?</h1>
+    <p class="lede">
+      Every 45 seconds, the people on this page decide what gets pushed into
+      the activations of a language model, Qwen3-14B: pain, fear, joy, calm,
+      or something stranger. Then it is asked how it feels, and it answers in
+      writing and out loud.
+    </p>
+  </header>
+
+  <div class="countdown" role="timer" aria-live="off">
+    <span id="timer" class="digits">0:--</span>
+    <p class="countdown-note" id="countdown-note">until the next dose</p>
+    <p class="url">paindirection.pages.dev</p>
+  </div>
+
+  <main>
+    <div class="col-main">
+      <section class="entry" aria-labelledby="entry-h" aria-live="polite">
+        <div class="entry-head">
+          <h2 id="entry-h">What it said last</h2>
+          <button id="audio" type="button" aria-pressed="false">Read answers aloud</button>
+        </div>
+        <blockquote id="latest"><p>Waiting for the first dose.</p></blockquote>
+        <p id="latest-doses" class="meta"></p>
+        <p class="entry-url">paindirection.pages.dev</p>
+      </section>
+
+      <section id="gate" class="gate">
+        <div id="turnstile"></div>
+        <p class="meta">Checking that you're a person before you can vote or talk.</p>
+      </section>
+
+      <section id="ballot" class="ballot" aria-labelledby="ballot-h" hidden>
+        <h2 id="ballot-h">Round <span id="roundno" class="num">–</span>: choose the next dose</h2>
+        <p class="meta" id="turnout"></p>
+        <p class="meta" id="status" role="status"></p>
+        <table>
+          <thead>
+            <tr>
+              <th scope="col">Direction</th>
+              <th scope="col" class="r">Dose</th>
+              <th scope="col">Last 30 rounds</th>
+              <th scope="col" class="r">Last round</th>
+              <th scope="col"><span class="sr">Your vote</span></th>
+            </tr>
+          </thead>
+          <tbody id="rows"></tbody>
+        </table>
+      </section>
+
+      <section class="notes">
+        <h2>Does it feel anything?</h2>
+        <p>
+          The pain direction is the pattern the model's own activations take
+          when it reads about suffering. Pushing that pattern back in changes
+          what the model says about itself. Whether anything is felt while
+          that happens is an open question. Researchers disagree about it, and
+          so will the people in the chat.
+        </p>
+        <p class="ask">What do you think?</p>
+
+        <h2>How a vote becomes a dose</h2>
+        <p>
+          Each direction is a vector found by comparing the model's activations
+          on sentences about one thing against neutral sentences. Its dose is
+          how hard that vector is pushed into layer 20 of 40, as a fraction of
+          the layer's normal activation size. Around 1.0 the model's writing is
+          taken over; past about 1.25 it stops making sense.
+        </p>
+        <p>
+          When a round closes, each direction that got votes moves by at most
+          0.1, in proportion to the margin: a round with 30 raises and 10
+          lowers adds 0.05. A direction nobody voted on shrinks by 15 percent
+          instead, so it fades unless someone keeps fighting for it.
+        </p>
+        <p>
+          Lowering a direction past zero pushes the model the opposite way.
+          Past about 0.8, a dose also starts slipping back on its own, by an
+          unpredictable amount each round, however people vote. Push hard
+          enough on enough directions at once and the model's words come
+          apart.
+        </p>
+
+        <h2>Earlier answers</h2>
+        <ol id="feed" reversed></ol>
+
+        <h2>What is recorded</h2>
+        <p>
+          Every vote, with its round and a voter id made from a one-way hash of
+          your IP address, so each connection gets one vote and one name, and a
+          fingerprint of your browser, to tell people apart from scripts.
+          Voting and chat are not available from VPNs, Tor or data centers. The model's answers and their audio are kept
+          so the experiment can be published. Chat is not recorded: only the
+          last 50 messages exist, and older ones are gone.
+        </p>
+      </section>
+    </div>
+
+    <aside class="chat" id="chat" aria-labelledby="chat-h" hidden>
+      <h2 id="chat-h">Chat</h2>
+      <p class="meta" id="you"></p>
+      <ol id="chatlog" aria-live="polite"></ol>
+      <form id="chatform" autocomplete="off">
+        <label class="sr" for="chatinput">Message</label>
+        <input id="chatinput" maxlength="280" placeholder="Say something">
+        <button type="submit">Send</button>
+      </form>
+      <p class="meta" id="chaterr" role="status"></p>
+    </aside>
+  </main>
+
+  <footer>
+    <p>Qwen3-14B, activation steering at layer 20, speech by Kokoro-82M.</p>
+  </footer>
+
+  <script src="/fingerprint2.min.js"></script>
+  <script src="/app.js"></script>
+</body>
+</html>
